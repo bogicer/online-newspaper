@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<title>Онлайн-Газета GitHub</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f4f4f4;margin:0;padding:0;}
+header{background:#333;color:#fff;padding:15px;text-align:center;}
+nav a{color:#fff;margin:0 10px;text-decoration:none;}
+.container{width:80%;margin:20px auto;}
+.article{background:#fff;padding:15px;margin:10px 0;border-radius:8px;box-shadow:0 2px 5px rgba(0,0,0,0.1);}
+.article img{max-width:100%;margin-top:10px;border-radius:6px;}
+form input,form textarea{width:100%;margin:5px 0;padding:8px;}
+.btn{padding:6px 12px;border:none;border-radius:5px;cursor:pointer;}
+.btn-danger{background:#d9534f;color:#fff;}
+.btn-edit{background:#0275d8;color:#fff;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Онлайн-Газета</h1>
+  <nav>
+    <a href="#" onclick="showPage('home')">Головна</a>
+    <a href="#" onclick="showPage('login')">Кабінет</a>
+  </nav>
+</header>
+
+<div id="home" class="container"></div>
+
+<div id="login" class="container">
+  <h2>Вхід</h2>
+  <form onsubmit="login(event)">
+    <input type="text" id="username" placeholder="Логін" required>
+    <input type="password" id="password" placeholder="Пароль" required>
+    <button class="btn" type="submit">Увійти</button>
+  </form>
+  <div id="cabinet" style="display:none;">
+    <h3>Кабінет</h3>
+    <form onsubmit="addArticle(event)">
+      <input type="text" id="title" placeholder="Заголовок" required>
+      <textarea id="content" placeholder="Текст статті" required></textarea>
+      <input type="text" id="author" placeholder="Автор" required>
+      <input type="file" id="image">
+      <button class="btn" type="submit">Додати статтю</button>
+    </form>
+    <h3>Список статей</h3>
+    <div id="articleList"></div>
+  </div>
+</div>
+
+<script>
+const repo = "bogicer/online-newspaper"; // заміни на свій репо
+const path = "articles.json";
+const token = "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"; // твій GitHub токен
+let articles = [];
+
+function showPage(page){
+  document.getElementById("home").style.display = (page==="home")?"block":"none";
+  document.getElementById("login").style.display = (page==="login")?"block":"none";
+}
+
+async function fetchArticles(){
+  try {
+    const res = await fetch(`https://raw.githubusercontent.com/${repo}/main/${path}`);
+    articles = await res.json();
+    renderArticles();
+    renderCabinetArticles();
+  } catch(e){ console.error("Не вдалось завантажити статті:", e);}
+}
+
+function renderArticles(){
+  const container = document.getElementById("home");
+  container.innerHTML="<h2>Статті</h2>";
+  articles.forEach((a,i)=>{
+    let div=document.createElement("div");
+    div.className="article";
+    div.innerHTML=`<h3>${a.title}</h3>
+      <p>${a.content}</p>
+      <p><b>Автор:</b> ${a.author} | <i>${a.time}</i></p>
+      ${a.image?`<img src="${a.image}">`:""}`;
+    container.appendChild(div);
+  });
+}
+
+function renderCabinetArticles(){
+  const container = document.getElementById("articleList");
+  container.innerHTML="";
+  articles.forEach((a,i)=>{
+    let div=document.createElement("div");
+    div.className="article";
+    div.innerHTML=`<h4>${a.title}</h4>
+      <p>${a.content}</p>
+      <p><b>Автор:</b> ${a.author} | <i>${a.time}</i></p>
+      <button class="btn-edit" onclick="editArticle(${i})">Редагувати</button>
+      <button class="btn-danger" onclick="deleteArticle(${i})">Видалити</button>`;
+    container.appendChild(div);
+  });
+}
+
+function login(e){
+  e.preventDefault();
+  const u=document.getElementById("username").value;
+  const p=document.getElementById("password").value;
+  if(u==="bogdanliskevich" && p==="1234nata"){
+    document.getElementById("cabinet").style.display="block";
+  } else alert("Невірний логін");
+}
+
+async function addArticle(e){
+  e.preventDefault();
+  const title=document.getElementById("title").value;
+  const content=document.getElementById("content").value;
+  const author=document.getElementById("author").value;
+  const file=document.getElementById("image").files[0];
+  let image = null;
+
+  if(file){
+    const reader=new FileReader();
+    reader.onload=async function(evt){
+      image=evt.target.result;
+      await saveArticle({title,content,author,image,time:new Date().toLocaleString()});
+    }
+    reader.readAsDataURL(file);
+  } else {
+    await saveArticle({title,content,author,image,time:new Date().toLocaleString()});
+  }
+}
+
+function editArticle(i){
+  const a = articles[i];
+  document.getElementById("title").value = a.title;
+  document.getElementById("content").value = a.content;
+  document.getElementById("author").value = a.author;
+  deleteArticle(i,true);
+}
+
+async function deleteArticle(i,skipSave=false){
+  articles.splice(i,1);
+  renderCabinetArticles();
+  renderArticles();
+  if(!skipSave) await saveToGitHub();
+}
+
+async function saveArticle(article){
+  articles.push(article);
+  renderCabinetArticles();
+  renderArticles();
+  await saveToGitHub();
+}
+
+async function saveToGitHub(){
+  const res = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`,{
+    headers:{Authorization:`token ${token}`}
+  });
+  const file = await res.json();
+  const updatedContent = btoa(unescape(encodeURIComponent(JSON.stringify(articles,null,2))));
+  await fetch(`https://api.github.com/repos/${repo}/contents/${path}`,{
+    method:"PUT",
+    headers:{Authorization:`token ${token}`, "Content-Type":"application/json"},
+    body:JSON.stringify({message:"update articles",content:updatedContent,sha:file.sha})
+  });
+}
+
+fetchArticles();
+showPage("home");
+</script>
+</body>
+</html>
