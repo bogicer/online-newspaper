@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<title>Газета</title>
+<style>
+body { font-family: Arial; background:#f0f8f8; margin:0; padding:0; }
+header { background:#028090; color:white; padding:15px; text-align:center; }
+main { padding:20px; }
+.card { background:#fff; border:1px solid #ccc; padding:15px; margin:10px 0; border-radius:8px; }
+button { background:#00a896; color:white; border:none; padding:8px 15px; border-radius:5px; cursor:pointer; }
+button:hover { background:#028090; }
+.hidden { display:none; }
+</style>
+</head>
+<body>
+<header>
+<h1>Газета</h1>
+<div id="authSection">
+<input id="username" placeholder="Логін">
+<input id="password" type="password" placeholder="Пароль">
+<button onclick="login()">Увійти</button>
+<button onclick="register()">Реєстрація</button>
+</div>
+<div id="userSection" class="hidden">
+<span id="welcomeUser"></span>
+<button onclick="logout()">Вийти</button>
+</div>
+</header>
+<main>
+<div id="adminPanel" class="hidden">
+<h2>Адмін панель</h2>
+<input id="title" placeholder="Заголовок">
+<textarea id="content" placeholder="Текст статті"></textarea><br>
+<button onclick="addArticle()">Додати статтю</button>
+</div>
+
+<h2>Статті</h2>
+<div id="articles"></div>
+</main>
+
+<script>
+let currentUser = null;
+let users = [{username:"admin", password:"1234", role:"admin"}];
+let articles = [];
+
+// Підвантаження статей з articles.json
+async function loadArticles(){
+  let res = await fetch("articles.json");
+  articles = await res.json();
+  renderArticles();
+}
+
+function renderArticles(){
+  const div = document.getElementById("articles");
+  div.innerHTML = "";
+  articles.forEach((a,i)=>{
+    let html = `<div class='card'>
+      <h3>${a.title}</h3>
+      <p>${a.content}</p>`;
+    if(currentUser?.role==="admin"){
+      html += `<button onclick="deleteArticle(${i})">Видалити</button>`;
+    }
+    html += "</div>";
+    div.innerHTML += html;
+  });
+}
+
+function addArticle(){
+  let title = document.getElementById("title").value;
+  let content = document.getElementById("content").value;
+  if(title && content){
+    articles.push({title, content});
+    renderArticles();
+    updateArticlesJson();
+  }
+}
+
+function deleteArticle(i){
+  articles.splice(i,1);
+  renderArticles();
+  updateArticlesJson();
+}
+
+function login(){
+  let u = document.getElementById("username").value;
+  let p = document.getElementById("password").value;
+  let user = users.find(x=>x.username===u && x.password===p);
+  if(user){
+    currentUser = user;
+    document.getElementById("authSection").classList.add("hidden");
+    document.getElementById("userSection").classList.remove("hidden");
+    document.getElementById("welcomeUser").innerText = "Привіт, "+u;
+    if(user.role==="admin") document.getElementById("adminPanel").classList.remove("hidden");
+  } else { alert("Невірні дані"); }
+}
+
+function register(){
+  let u = document.getElementById("username").value;
+  let p = document.getElementById("password").value;
+  if(!users.find(x=>x.username===u)){
+    users.push({username:u, password:p, role:"comment"});
+    alert("Реєстрація успішна!");
+  } else { alert("Користувач існує!"); }
+}
+
+function logout(){
+  currentUser=null;
+  document.getElementById("authSection").classList.remove("hidden");
+  document.getElementById("userSection").classList.add("hidden");
+  document.getElementById("adminPanel").classList.add("hidden");
+}
+
+// ⚡ Викликає GitHub Action через workflow_dispatch (адмін пушить зміни)
+function updateArticlesJson(){
+  fetch("https://api.github.com/repos/bogicer/online-newspaper
+/dispatches",{
+    method:"POST",
+    headers:{
+      "Authorization":"token ghp_ТВОЙ_ТОКЕН",
+      "Accept":"application/vnd.github.v3+json"
+    },
+    body: JSON.stringify({event_type:"update_articles"})
+  }).then(()=>alert("Зміни надіслані на GitHub через Actions!"));
+}
+
+loadArticles();
+</script>
+</body>
+</html>
