@@ -1,0 +1,23 @@
+name: Update Articles
+
+on:
+  workflow_dispatch:
+    inputs:
+      dummy:
+        description: 'Тригер для ручного запуску'
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Обновити articles.json
+        run: |
+          echo '${{ github.event.client_payload.articles }}' > articles.json
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add articles.json
+          git commit -m "Оновлення статей"
+          git push
