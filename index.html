@@ -11,6 +11,8 @@ main { padding:20px; }
 button { background:#00a896; color:white; border:none; padding:8px 15px; border-radius:5px; cursor:pointer; }
 button:hover { background:#028090; }
 .hidden { display:none; }
+textarea { width:100%; height:80px; margin-top:5px; }
+input, textarea { padding:5px; border-radius:5px; border:1px solid #ccc; }
 </style>
 </head>
 <body>
@@ -44,11 +46,19 @@ let currentUser = null;
 let users = [{username:"admin", password:"1234", role:"admin"}];
 let articles = [];
 
-// Підвантаження статей з articles.json
+// --- GitHub settings ---
+const GITHUB_USER = "ТВОЙ_ЛОГІН";
+const GITHUB_REPO = "ТВОЙ_РЕПО";
+const GITHUB_FILE = "articles.json";
+const GITHUB_TOKEN = "ghp_ТВОЙ_ТОКЕН"; // ⚠️ Тримати приватним
+
+// --- Load articles ---
 async function loadArticles(){
-  let res = await fetch("articles.json");
-  articles = await res.json();
-  renderArticles();
+  try{
+    let res = await fetch(`https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/${GITHUB_FILE}`);
+    articles = await res.json();
+    renderArticles();
+  }catch(e){console.error("Не вдалося завантажити статті", e);}
 }
 
 function renderArticles(){
@@ -66,22 +76,24 @@ function renderArticles(){
   });
 }
 
+// --- Admin functions ---
 function addArticle(){
   let title = document.getElementById("title").value;
   let content = document.getElementById("content").value;
   if(title && content){
     articles.push({title, content});
     renderArticles();
-    updateArticlesJson();
-  }
+    pushToGitHub();
+  }else alert("Заповніть всі поля");
 }
 
 function deleteArticle(i){
   articles.splice(i,1);
   renderArticles();
-  updateArticlesJson();
+  pushToGitHub();
 }
 
+// --- Auth ---
 function login(){
   let u = document.getElementById("username").value;
   let p = document.getElementById("password").value;
@@ -111,17 +123,30 @@ function logout(){
   document.getElementById("adminPanel").classList.add("hidden");
 }
 
-// ⚡ Викликає GitHub Action через workflow_dispatch (адмін пушить зміни)
-function updateArticlesJson(){
-  fetch("https://api.github.com/repos/bogicer/online-newspaper
-/dispatches",{
-    method:"POST",
-    headers:{
-      "Authorization":"token ghp_ТВОЙ_ТОКЕН",
-      "Accept":"application/vnd.github.v3+json"
-    },
-    body: JSON.stringify({event_type:"update_articles"})
-  }).then(()=>alert("Зміни надіслані на GitHub через Actions!"));
+// --- GitHub Push ---
+async function pushToGitHub(){
+  try{
+    // Get SHA of file
+    let res = await fetch(`https://api.github.com/repos/${bogicer}/${online-newspaper}/contents/${articles.json}`,{
+      headers:{Authorization:"token "+GITHUB_TOKEN}
+    });
+    let data = await res.json();
+    let sha = data.sha;
+
+    // Update file
+    let commitMessage = "Оновлення статей через сайт";
+    let content = btoa(unescape(encodeURIComponent(JSON.stringify(articles, null, 2))));
+
+    await fetch(`https://api.github.com/repos/${bogicer}/${online-newspaper}/contents/${articles.json}`,{
+      method:"PUT",
+      headers:{
+        "Authorization":"token "+GITHUB_TOKEN,
+        "Accept":"application/vnd.github.v3+json"
+      },
+      body: JSON.stringify({message:commitMessage, content:content, sha:sha})
+    });
+    alert("Статті оновлено на GitHub!");
+  }catch(e){console.error("Помилка пушу на GitHub", e);}
 }
 
 loadArticles();
